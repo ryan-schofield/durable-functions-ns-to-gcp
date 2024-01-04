@@ -5,6 +5,6 @@
 		}
 	],
 	"settings": {
-		"python.defaultInterpreterPath": "/func/.venv/Scripts/python.exe"
+		"python.defaultInterpreterPath": "./func/.venv/Scripts/python.exe"
 	}
 }

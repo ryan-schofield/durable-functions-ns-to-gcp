@@ -1,27 +1,32 @@
 import azure.functions as func
-import datetime
-import json
-import logging
+import azure.durable_functions as df
 
-app = func.FunctionApp()
+from activity_upload_netsuite_file import ns_bp
+from activity_copy_blob_to_gcp import gcp_bp
 
-@app.route(route="temp_http_trigger", auth_level=func.AuthLevel.ANONYMOUS)
-def temp_http_trigger(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info('Python HTTP trigger function processed a request.')
+app = df.DFApp(http_auth_level=func.AuthLevel.FUNCTION)
 
-    name = req.params.get('name')
-    if not name:
-        try:
-            req_body = req.get_json()
-        except ValueError:
-            pass
-        else:
-            name = req_body.get('name')
+app.register_functions(ns_bp)
+app.register_functions(gcp_bp)
 
-    if name:
-        return func.HttpResponse(f"Hello, {name}. This HTTP triggered function executed successfully.")
-    else:
-        return func.HttpResponse(
-             "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response.",
-             status_code=200
-        )
+
+@app.route(route="orchestrators/{functionName}")
+@app.durable_client_input(client_name="client")
+async def http_start(req: func.HttpRequest, client):
+    req_body = req.get_json()
+    function_name = req.route_params.get("functionName")
+    instance_id = await client.start_new(function_name, None, req_body)
+
+    return client.create_check_status_response(req, instance_id)
+
+
+@app.orchestration_trigger(context_name="context")
+def durable_client_orchestrator(context: df.DurableOrchestrationContext):
+    activity_function_name = context.get_input()["func_name"]
+    orch_input = context.get_input()["reqbody"]
+    if isinstance(orch_input, dict):
+        orch_input = [orch_input]
+    input_batch = [context.call_activity(activity_function_name, f) for f in orch_input]
+    result = yield context.task_all(input_batch)
+
+    return result
