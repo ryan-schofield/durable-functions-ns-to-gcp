@@ -1,0 +1,7 @@
+azure-functions
+azure-functions-durable
+azure-storage-blob
+google-cloud-storage
+google-auth
+netsuitesdk
+tenacity
